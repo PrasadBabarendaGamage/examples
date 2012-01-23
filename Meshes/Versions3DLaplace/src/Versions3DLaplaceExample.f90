@@ -167,6 +167,7 @@ PROGRAM VERSIONS3DLAPLACE
   !Start the creation of the region
   CALL CMISSRegion_Initialise(Region,Err)
   CALL CMISSRegion_CreateStart(RegionUserNumber,WorldRegion,Region,Err)
+  CALL CMISSRegion_LabelSet(Region,"LaplaceRegion",Err)
   !Set the regions coordinate system to the 2D RC coordinate system that we have created
   CALL CMISSRegion_CoordinateSystemSet(Region,CoordinateSystem,Err)
   !Finish the creation of the region
@@ -291,8 +292,8 @@ PROGRAM VERSIONS3DLAPLACE
   CALL CMISSField_CreateStart(GeometricFieldUserNumber,Region,GeometricField,Err)
   !Set the decomposition to use
   CALL CMISSField_MeshDecompositionSet(GeometricField,Decomposition,Err)
-  !CALL CMISSField_ScalingTypeSet(GeometricField,CMISS_FIELD_UNIT_SCALING,Err)
-  CALL CMISSField_ScalingTypeSet(GeometricField,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+  CALL CMISSField_ScalingTypeSet(GeometricField,CMISS_FIELD_UNIT_SCALING,Err)
+  !CALL CMISSField_ScalingTypeSet(GeometricField,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
@@ -301,6 +302,8 @@ PROGRAM VERSIONS3DLAPLACE
   CALL CMISSField_CreateFinish(GeometricField,Err)
 
   CALL CMISSDiagnosticsSetOn(CMISS_ALL_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["FIELD_MAPPINGS_CALCULATE"],Err)
+
+  CALL CMISSField_ParameterSetUpdateStart(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,Err)
 
   !Node 1 
   !Geometric x component
@@ -546,7 +549,6 @@ PROGRAM VERSIONS3DLAPLACE
   CALL CMISSField_ParameterSetUpdateNode(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,7,8,3,ZERO,Err)
   CALL CMISSField_ParameterSetUpdateNode(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,8,8,3,ZERO,Err)
 
-  CALL CMISSField_ParameterSetUpdateStart(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,Err)
   CALL CMISSField_ParameterSetUpdateFinish(GeometricField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,Err)
 
   CALL CMISSDiagnosticsSetOff(Err)
@@ -661,8 +663,8 @@ PROGRAM VERSIONS3DLAPLACE
   IF(EXPORT_FIELD) THEN
     CALL CMISSFields_Initialise(Fields,Err)
     CALL CMISSFields_Create(Region,Fields,Err)
-    CALL CMISSFields_NodesExport(Fields,"LaplaceSolution","FORTRAN",Err)
-    CALL CMISSFields_ElementsExport(Fields,"LaplaceSolution","FORTRAN",Err)
+    CALL CMISSFields_NodesExport(Fields,"Laplace","FORTRAN",Err)
+    CALL CMISSFields_ElementsExport(Fields,"Laplace","FORTRAN",Err)
     CALL CMISSFields_Finalise(Fields,Err)
   ENDIF
   
