@@ -47,7 +47,7 @@
      4.  #Values=4
       Value indices:     1   2   3   4
       Scale factor indices:   13  14  15  16
- 2) Lambda, field,  rectangular cartesian, #Components=4
+ 2) Lambda, field,  rectangular cartesian, #Components=3
    1.   c.Hermite*c.Hermite, no modify, standard node based.
      #Nodes= 4
      1.  #Values=4
@@ -90,21 +90,7 @@
      4.  #Values=4
       Value indices:     1   2   3   4
       Scale factor indices:   13  14  15  16
-   4.   c.Hermite*c.Hermite, no modify, standard node based.
-     #Nodes= 4
-     1.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    1   2   3   4
-     2.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    5   6   7   8
-     3.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    9  10  11  12
-     4.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:   13  14  15  16
- 3) Lambda RHS, field,  rectangular cartesian, #Components=4
+ 3) Lambda RHS, field,  rectangular cartesian, #Components=3
    1.   c.Hermite*c.Hermite, no modify, standard node based.
      #Nodes= 4
      1.  #Values=4
@@ -134,20 +120,6 @@
       Value indices:     1   2   3   4
       Scale factor indices:   13  14  15  16
    3.   c.Hermite*c.Hermite, no modify, standard node based.
-     #Nodes= 4
-     1.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    1   2   3   4
-     2.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    5   6   7   8
-     3.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:    9  10  11  12
-     4.  #Values=4
-      Value indices:     1   2   3   4
-      Scale factor indices:   13  14  15  16
-   4.   c.Hermite*c.Hermite, no modify, standard node based.
      #Nodes= 4
      1.  #Values=4
       Value indices:     1   2   3   4

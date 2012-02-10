@@ -1,8 +1,7 @@
  Group name: Region1
  Shape.  Dimension=3
- #Scale factor sets= 2
+ #Scale factor sets= 1
  c.Hermite*c.Hermite*c.Hermite, #Scale factors=64
- l.Lagrange*l.Lagrange*l.Lagrange, #Scale factors=8
  #Nodes=           8
  #Fields=5
  1) Geometry, coordinate, rectangular cartesian, #Components=3
@@ -163,12 +162,14 @@
      8.  #Values=8
       Value indices:     1   2   3   4   5   6   7   8
       Scale factor indices:   57  58  59  60  61  62  63  64
- 3) Material1, field,  rectangular cartesian, #Components=2
+ 3) Material1, field,  rectangular cartesian, #Components=3
    1.   l.Lagrange*l.Lagrange*l.Lagrange, no modify, grid based.
      #xi1=1, #xi2=1, #xi3=1
    2.   l.Lagrange*l.Lagrange*l.Lagrange, no modify, grid based.
      #xi1=1, #xi2=1, #xi3=1
- 4) Dependent1, field,  rectangular cartesian, #Components=4
+   3.   l.Lagrange*l.Lagrange*l.Lagrange, no modify, grid based.
+     #xi1=1, #xi2=1, #xi3=1
+ 4) Dependent1, field,  rectangular cartesian, #Components=3
    1.   c.Hermite*c.Hermite*c.Hermite, no modify, standard node based.
      #Nodes= 8
      1.  #Values=8
@@ -247,33 +248,7 @@
      8.  #Values=8
       Value indices:     1   2   3   4   5   6   7   8
       Scale factor indices:   57  58  59  60  61  62  63  64
-   4.   l.Lagrange*l.Lagrange*l.Lagrange, no modify, standard node based.
-     #Nodes= 8
-     1.  #Values=1
-      Value indices:     1
-      Scale factor indices:   65
-     2.  #Values=1
-      Value indices:     1
-      Scale factor indices:   66
-     3.  #Values=1
-      Value indices:     1
-      Scale factor indices:   67
-     4.  #Values=1
-      Value indices:     1
-      Scale factor indices:   68
-     5.  #Values=1
-      Value indices:     1
-      Scale factor indices:   69
-     6.  #Values=1
-      Value indices:     1
-      Scale factor indices:   70
-     7.  #Values=1
-      Value indices:     1
-      Scale factor indices:   71
-     8.  #Values=1
-      Value indices:     1
-      Scale factor indices:   72
- 5) Dependent1DelUDelN, field,  rectangular cartesian, #Components=4
+ 5) Dependent1DelUDelN, field,  rectangular cartesian, #Components=3
    1.   c.Hermite*c.Hermite*c.Hermite, no modify, standard node based.
      #Nodes= 8
      1.  #Values=8
@@ -352,38 +327,12 @@
      8.  #Values=8
       Value indices:     1   2   3   4   5   6   7   8
       Scale factor indices:   57  58  59  60  61  62  63  64
-   4.   l.Lagrange*l.Lagrange*l.Lagrange, no modify, standard node based.
-     #Nodes= 8
-     1.  #Values=1
-      Value indices:     1
-      Scale factor indices:   65
-     2.  #Values=1
-      Value indices:     1
-      Scale factor indices:   66
-     3.  #Values=1
-      Value indices:     1
-      Scale factor indices:   67
-     4.  #Values=1
-      Value indices:     1
-      Scale factor indices:   68
-     5.  #Values=1
-      Value indices:     1
-      Scale factor indices:   69
-     6.  #Values=1
-      Value indices:     1
-      Scale factor indices:   70
-     7.  #Values=1
-      Value indices:     1
-      Scale factor indices:   71
-     8.  #Values=1
-      Value indices:     1
-      Scale factor indices:   72
  Element:            1 0 0
    Values:
      2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00   2.0000000000000000E+00
      6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00   6.0000000000000000E+00
+     1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03   1.0000000000000000E+03
    Nodes:
            1           2           3           4           5           6           7           8
    Scale factors:
      1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01   1.0000000000000000E+00   9.9999999999999978E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999978E-01   9.9999999999999956E-01   9.9999999999999956E-01   9.9999999999999933E-01
-     1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00   1.0000000000000000E+00
