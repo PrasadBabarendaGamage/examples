@@ -370,6 +370,7 @@ PROGRAM COUPLED_LINEARELASTICITY_LINEARELASTICITY
   CALL CMISSDecomposition_CreateStart(Decomposition1UserNumber,Mesh1,Decomposition1,Err)
   !Set the decomposition to be a general decomposition with the specified number of domains
   CALL CMISSDecomposition_TypeSet(Decomposition1,CMISS_DECOMPOSITION_CALCULATED_TYPE,Err)
+  CALL CMISSDecomposition_CalculateFacesSet(Decomposition1,.TRUE.,err)
   CALL CMISSDecomposition_NumberOfDomainsSet(Decomposition1,NumberOfComputationalNodes,Err)
   !Finish the decomposition
   CALL CMISSDecomposition_CreateFinish(Decomposition1,Err)
@@ -380,6 +381,7 @@ PROGRAM COUPLED_LINEARELASTICITY_LINEARELASTICITY
   CALL CMISSDecomposition_CreateStart(Decomposition2UserNumber,Mesh2,Decomposition2,Err)
   !Set the decomposition to be a general decomposition with the specified number of domains
   CALL CMISSDecomposition_TypeSet(Decomposition2,CMISS_DECOMPOSITION_CALCULATED_TYPE,Err)
+  CALL CMISSDecomposition_CalculateFacesSet(Decomposition2,.TRUE.,err)
   CALL CMISSDecomposition_NumberOfDomainsSet(Decomposition2,NumberOfComputationalNodes,Err)
   !Finish the decomposition
   CALL CMISSDecomposition_CreateFinish(Decomposition2,Err)
@@ -882,7 +884,7 @@ PROGRAM COUPLED_LINEARELASTICITY_LINEARELASTICITY
     CALL CMISSInterfaceCondition_MethodSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_LAGRANGE_MULTIPLIERS_METHOD,Err)
   ENDIF
   !Specify the type of interface condition operator
-  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_CONTINUITY_OPERATOR,Err)
+  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_GAUSS_CONTINUITY_OPERATOR,Err)
   !Add in the dependent variables from the equations sets
   CALL CMISSInterfaceCondition_DependentVariableAdd(InterfaceCondition,Mesh1Index,EquationsSet1, &
     & CMISS_FIELD_U_VARIABLE_TYPE,Err)

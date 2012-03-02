@@ -108,22 +108,25 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   
   !Program variables
 
-  INTEGER(CMISSIntg) :: NUMBER_OF_ARGUMENTS,ARGUMENT_Length,STATUS
-  INTEGER(CMISSIntg) :: NumberGlobalXElements,NumberGlobalYElements,NumberGlobalZElements
+  INTEGER(CMISSIntg) :: NumberGlobalXElements1,NumberGlobalYElements1,NumberGlobalZElements1
+  INTEGER(CMISSIntg) :: NumberGlobalXElements2,NumberGlobalYElements2,NumberGlobalZElements2
+  INTEGER(CMISSIntg) :: NumberGlobalInterfaceYElements,coupledMeshElementNumber
   INTEGER(CMISSIntg) :: InterpolationType,NumberOfGaussXi,NumberOfNodeXi,NumberOfDimensions
   INTEGER(CMISSIntg) :: GeometricField1NumberOfComponents,GeometricField2NumberOfComponents,FibreField1NumberOfComponents, &
     & FibreField2NumberOfComponents,MaterialField1NumberOfComponents,MaterialField2NumberOfComponents, &
-    & DependentField1NumberOfComponents,DependentField2NumberOfComponents
-  CHARACTER(LEN=255) :: COMMAND_ARGUMENT
+    & DependentField1NumberOfComponents,DependentField2NumberOfComponents,ContinuityOperator
   INTEGER(CMISSIntg) :: EquationsSet1Index,EquationsSet2Index
   INTEGER(CMISSIntg) :: InterfaceConditionIndex
   INTEGER(CMISSIntg) :: Mesh1Index,Mesh2Index
   INTEGER(CMISSIntg) :: NumberOfComputationalNodes,ComputationalNodeNumber
-  INTEGER(CMISSIntg) :: y_element_idx,z_element_idx,mesh_local_y_node,mesh_local_z_node
-  INTEGER(CMISSIntg) :: Side3NodeGroup(3),Side2NodeGroup(2),Back2NodeGroup(2),Front2NodeGroup(2),Bottom6NodeGroup(6), &
-    & Bottom4NodeGroup(4),node_idx,node,component,LoadSteps
-  REAL(CMISSDP) :: XI2(2),XI3(3), Height,Width,Length
-  LOGICAL :: Uncoupled,ForceBoundaryConditions,PenaltyMethod
+  INTEGER(CMISSIntg) :: interfaceYElementIdx,meshLocalYNode,Ynode,Xnode
+  INTEGER(CMISSIntg) :: node_idx,node,LoadSteps
+  INTEGER(CMISSIntg) :: NumberOfNodesX1,NumberOfNodesX2,NumberOfNodesY1,NumberOfNodesY2,NumberOfNodesZ1,NumberOfNodesZ2
+  INTEGER(CMISSIntg), ALLOCATABLE :: BackNodeGroup1(:),BackNodeGroup2(:),FrontNodeGroup1(:),FrontNodeGroup2(:), &
+    & InterfaceNodeGroup(:),BottomNodeGroup1(:),BottomNodeGroup2(:)
+  INTEGER(CMISSIntg) :: NumberOfInterfaceNodes,TotalNumberOfNodes1,TotalNumberOfNodes2
+  REAL(CMISSDP) :: XI2(2), Height,Width,Length
+  LOGICAL :: Uncoupled,ForceBoundaryConditions,PenaltyMethod,Uniaxial,DecoupleInterfaceDerivatives,TwoDimensional
 
   !CMISS variables
 
@@ -136,14 +139,13 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   TYPE(CMISSFieldType) :: GeometricField1,GeometricField2,InterfaceGeometricField,DependentField1,DependentField2,LagrangeField, &
     & EquationsSetField1,EquationsSetField2,PenaltyField
   TYPE(CMISSFieldType) :: FibreField1,FibreField2,MaterialField1,MaterialField2
-  TYPE(CMISSFieldsType) :: Fields1,Fields2,Fields3,InterfaceFields
+  TYPE(CMISSFieldsType) :: Fields1,Fields2,Fields3
   TYPE(CMISSGeneratedMeshType) :: GeneratedMesh1,GeneratedMesh2,InterfaceGeneratedMesh
   TYPE(CMISSMeshType) :: Mesh1,Mesh2,InterfaceMesh
   TYPE(CMISSInterfaceMeshConnectivityType) :: InterfaceMeshConnectivity
   TYPE(CMISSInterfaceType) :: Interface
   TYPE(CMISSInterfaceConditionType) :: InterfaceCondition
   TYPE(CMISSInterfaceEquationsType) :: InterfaceEquations
-  TYPE(CMISSNodesType) :: Nodes
   TYPE(CMISSProblemType) :: CoupledProblem
   TYPE(CMISSRegionType) :: Region1,Region2,WorldRegion
   TYPE(CMISSSolverType) :: NonLinearSolver,LinearSolver
@@ -171,12 +173,38 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   IF(.NOT.QUICKWIN_STATUS) QUICKWIN_STATUS=SETWINDOWCONFIG(QUICKWIN_WINDOW_CONFIG)
 #endif
 
-  NumberGlobalYElements=1
-  NumberGlobalZElements=1
-  IF(NumberGlobalZElements==0) THEN
+  Uncoupled=.FALSE. 
+  Uniaxial=.FALSE. !Use Uniaxial boundary conditions
+  TwoDimensional=.FALSE.
+  PenaltyMethod=.FALSE.
+  ForceBoundaryConditions=.FALSE. 
+  DecoupleInterfaceDerivatives=.FALSE.
+  !ContinuityOperator=CMISS_INTERFACE_CONDITION_FIELD_GAUSS_CONTINUITY_OPERATOR
+  ContinuityOperator=CMISS_INTERFACE_CONDITION_FIELD_NODE_CONTINUITY_OPERATOR
+  !InterpolationType = CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION
+  InterpolationType = CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION
+  NumberGlobalXElements1=2
+  NumberGlobalYElements1=3
+  NumberGlobalXElements2=2
+  NumberGlobalYElements2=3
+  NumberGlobalInterfaceYElements=MAX(NumberGlobalYElements1,NumberGlobalYElements2)
+  IF(Uncoupled) THEN
+    Width=2.0_CMISSDP
+    NumberGlobalXElements2=NumberGlobalXElements1*2
+    NumberGlobalXElements1=NumberGlobalXElements2
+  ELSE
+    Width=1.0_CMISSDP
+  ENDIF
+  Height=1.0_CMISSDP
+  Length=1.0_CMISSDP
+  IF(TwoDimensional) THEN
     NumberOfDimensions=2
+    NumberGlobalZElements1=0
+    NumberGlobalZElements2=0
   ELSE
     NumberOfDimensions=3
+    NumberGlobalZElements1=1
+    NumberGlobalZElements2=1
   ENDIF
   GeometricField1NumberOfComponents=NumberOfDimensions
   GeometricField2NumberOfComponents=NumberOfDimensions
@@ -186,27 +214,19 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   MaterialField2NumberOfComponents=NumberOfDimensions !Note thickness parameter not required in 2D
   DependentField1NumberOfComponents=NumberOfDimensions
   DependentField2NumberOfComponents=NumberOfDimensions
-  PenaltyMethod=.FALSE.
-  ForceBoundaryConditions=.FALSE. 
-  Uncoupled=.FALSE. 
-  IF(Uncoupled) THEN
-    NumberGlobalXElements=2
-    Width=2.0_CMISSDP
-  ELSE
-    NumberGlobalXElements=1
-    Width=1.0_CMISSDP
-  ENDIF
-  Height=1.0_CMISSDP
-  Length=1.0_CMISSDP
-  InterpolationType = CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION
-  !InterpolationType = CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION
   SELECT CASE(InterpolationType)
   CASE(CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION)
     NumberOfGaussXi=2
+    NumberOfNodeXi=2
   CASE(CMISS_BASIS_QUADRATIC_LAGRANGE_INTERPOLATION)
     NumberOfGaussXi=3
-  CASE(CMISS_BASIS_CUBIC_LAGRANGE_INTERPOLATION,CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)
+    NumberOfNodeXi=3
+  CASE(CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)
     NumberOfGaussXi=4
+    NumberOfNodeXi=2
+  CASE(CMISS_BASIS_CUBIC_LAGRANGE_INTERPOLATION)
+    NumberOfGaussXi=4
+    NumberOfNodeXi=4
   CASE DEFAULT
     CALL HANDLE_ERROR("Invalid interpolation type.")
   END SELECT
@@ -296,15 +316,15 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSGeneratedMesh_TypeSet(GeneratedMesh1,CMISS_GENERATED_MESH_REGULAR_MESH_TYPE,Err)
   CALL CMISSGeneratedMesh_BasisSet(GeneratedMesh1,Basis1,Err)
   !Define the mesh on the first region
-  IF(NumberGlobalZElements==0) THEN
+  IF(TwoDimensional) THEN
     CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh1,[0.0_CMISSDP,0.0_CMISSDP],Err) 
     CALL CMISSGeneratedMesh_ExtentSet(GeneratedMesh1,[Width,Height],Err) 
   ELSE
     CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh1,[0.0_CMISSDP,0.0_CMISSDP,0.0_CMISSDP],Err) 
     CALL CMISSGeneratedMesh_ExtentSet(GeneratedMesh1,[Width,Height,0.0_CMISSDP],Err) 
   ENDIF
-  CALL CMISSGeneratedMesh_NumberOfElementsSet(GeneratedMesh1,[NumberGlobalXElements, &
-    & NumberGlobalYElements],Err)
+  CALL CMISSGeneratedMesh_NumberOfElementsSet(GeneratedMesh1,[NumberGlobalXElements1, &
+    & NumberGlobalYElements1],Err)
   !Finish the creation of a generated mesh in the first region 
   CALL CMISSMesh_Initialise(Mesh1,Err) 
   CALL CMISSGeneratedMesh_CreateFinish(GeneratedMesh1,Mesh1UserNumber,Mesh1,Err)
@@ -318,25 +338,25 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSGeneratedMesh_BasisSet(GeneratedMesh2,Basis2,Err)
   !Define the mesh on the first region
   IF(Uncoupled) THEN
-    IF(NumberGlobalZElements==0) THEN
+    IF(TwoDimensional) THEN
       CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh2,[0.0_CMISSDP,0.0_CMISSDP],Err)
     ELSE
       CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh2,[0.0_CMISSDP,0.0_CMISSDP,0.0_CMISSDP],Err)
     ENDIF
   ELSE
-    IF(NumberGlobalZElements==0) THEN
+    IF(TwoDimensional) THEN
       CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh2,[Width,0.0_CMISSDP],Err)
     ELSE
       CALL CMISSGeneratedMesh_OriginSet(GeneratedMesh2,[Width,0.0_CMISSDP,0.0_CMISSDP],Err)
     ENDIF
   ENDIF
-  IF(NumberGlobalZElements==0) THEN
+  IF(TwoDimensional) THEN
     CALL CMISSGeneratedMesh_ExtentSet(GeneratedMesh2,[Width,Height],Err)
   ELSE
     CALL CMISSGeneratedMesh_ExtentSet(GeneratedMesh2,[Width,Height,0.0_CMISSDP],Err)
   ENDIF
-  CALL CMISSGeneratedMesh_NumberOfElementsSet(GeneratedMesh2,[NumberGlobalXElements, &
-    & NumberGlobalYElements],Err)
+  CALL CMISSGeneratedMesh_NumberOfElementsSet(GeneratedMesh2,[NumberGlobalXElements2, &
+    & NumberGlobalYElements2],Err)
   !Finish the creation of a generated mesh in the first region 
   CALL CMISSMesh_Initialise(Mesh2,Err) 
   CALL CMISSGeneratedMesh_CreateFinish(GeneratedMesh2,Mesh2UserNumber,Mesh2,Err)
@@ -373,7 +393,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(GeometricField1,GeometricField1NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE,"Geometry",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(GeometricField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(GeometricField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(GeometricField1,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -381,7 +401,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
   ENDIF
   !Finish creating the first field
@@ -397,7 +417,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(GeometricField2,GeometricField2NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE,"Geometry",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(GeometricField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(GeometricField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(GeometricField2,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -405,7 +425,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
   ENDIF
   !Finish creating the first field
@@ -432,7 +452,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(FibreField1,FibreField1NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(FibreField1,CMISS_FIELD_U_VARIABLE_TYPE,"Fibre",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(FibreField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(FibreField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(FibreField1,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -440,7 +460,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(FibreField1,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(FibreField1,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(FibreField1,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
   ENDIF
   !Finish creating the first field
@@ -457,7 +477,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(FibreField2,FibreField2NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(FibreField2,CMISS_FIELD_U_VARIABLE_TYPE,"Fibre",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(FibreField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(FibreField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(FibreField2,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -465,7 +485,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(FibreField2,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(FibreField2,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(FibreField2,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
   ENDIF
   !Finish creating the first field
@@ -482,7 +502,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(MaterialField1,MaterialField1NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE,"Material",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(MaterialField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(MaterialField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(MaterialField1,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -494,7 +514,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_ComponentMeshComponentSet(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
   CALL CMISSField_ComponentInterpolationSet(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE,2, &
     & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
     CALL CMISSField_ComponentInterpolationSet(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE,3, &
       & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
@@ -513,7 +533,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(MaterialField2,MaterialField2NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE,"Material",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(MaterialField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(MaterialField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(MaterialField2,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -525,7 +545,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_ComponentMeshComponentSet(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
   CALL CMISSField_ComponentInterpolationSet(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE,2, &
     & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
     CALL CMISSField_ComponentInterpolationSet(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE,3, &
       & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
@@ -539,7 +559,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     & CMISS_FIELD_VALUES_SET_TYPE,1,2.0_CMISSDP,Err)
   CALL CMISSField_ComponentValuesInitialise(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE, &
     & CMISS_FIELD_VALUES_SET_TYPE,2,6.0_CMISSDP,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     !Set membrane thickness (only specifiy this for 3D space)
     CALL CMISSField_ComponentValuesInitialise(MaterialField1,CMISS_FIELD_U_VARIABLE_TYPE, &
       & CMISS_FIELD_VALUES_SET_TYPE,3,0.1_CMISSDP,Err)
@@ -548,10 +568,10 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set Mooney-Rivlin constants c10 and c01 to 2.0 and 1.0 respectively on the second region
   PRINT *, ' == >> INITIALIZE MATERIAL FIELD(2) << == '
   CALL CMISSField_ComponentValuesInitialise(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE, &
-    & CMISS_FIELD_VALUES_SET_TYPE,1,1.0_CMISSDP,Err)
+    & CMISS_FIELD_VALUES_SET_TYPE,1,2.0_CMISSDP,Err)
   CALL CMISSField_ComponentValuesInitialise(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE, &
-    & CMISS_FIELD_VALUES_SET_TYPE,2,1.0_CMISSDP,Err)
-  IF(NumberGlobalZElements/=0) THEN
+    & CMISS_FIELD_VALUES_SET_TYPE,2,6.0_CMISSDP,Err)
+  IF(TwoDimensional.EQV..FALSE.) THEN
     !Set membrane thickness (only specifiy this for 3D space)
     CALL CMISSField_ComponentValuesInitialise(MaterialField2,CMISS_FIELD_U_VARIABLE_TYPE, &
       & CMISS_FIELD_VALUES_SET_TYPE,3,0.1_CMISSDP,Err)
@@ -569,7 +589,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(DependentField1,DependentField1NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,"Dependent1",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(DependentField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(DependentField1,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(DependentField1,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -580,7 +600,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
     CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,3,1,Err)
   ENDIF
@@ -599,7 +619,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_NumberOfVariablesSet(DependentField2,DependentField2NumberOfVariables,Err)
   CALL CMISSField_VariableLabelSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,"Dependent2",Err)
   IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-    CALL CMISSField_ScalingTypeSet(DependentField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err)
+    CALL CMISSField_ScalingTypeSet(DependentField2,CMISS_FIELD_ARITHMETIC_MEAN_SCALING,Err) 
   ELSE
     CALL CMISSField_ScalingTypeSet(DependentField2,CMISS_FIELD_UNIT_SCALING,Err)
   ENDIF
@@ -610,7 +630,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
     CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,3,1,Err)
   ENDIF
@@ -623,7 +643,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     & CMISS_FIELD_VALUES_SET_TYPE,1,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,Err)
   CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE, &
     & CMISS_FIELD_VALUES_SET_TYPE,2,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,2,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE, &
       & CMISS_FIELD_VALUES_SET_TYPE,3,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,3,Err)
   ENDIF
@@ -634,7 +654,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     & CMISS_FIELD_VALUES_SET_TYPE,1,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,Err)
   CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE, &
     & CMISS_FIELD_VALUES_SET_TYPE,2,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,2,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE, &
       & CMISS_FIELD_VALUES_SET_TYPE,3,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,3,Err)
   ENDIF
@@ -757,7 +777,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !\todo Set interface region coordinate number of dimensions to 2 as generatedMesh_OriginSet call is inconsistent with those made above for each coupled body
   CALL CMISSGeneratedMesh_OriginSet(InterfaceGeneratedMesh,[Width,0.0_CMISSDP,0.0_CMISSDP],Err)
   CALL CMISSGeneratedMesh_ExtentSet(InterfaceGeneratedMesh,[0.0_CMISSDP,Height,0.0_CMISSDP],Err)
-  CALL CMISSGeneratedMesh_NumberOfElementsSet(InterfaceGeneratedMesh,[NumberGlobalYElements],Err)
+  CALL CMISSGeneratedMesh_NumberOfElementsSet(InterfaceGeneratedMesh,[NumberGlobalInterfaceYElements],Err)
   !Finish the creation of a generated mesh in interface
   CALL CMISSMesh_Initialise(InterfaceMesh,Err)
   CALL CMISSGeneratedMesh_CreateFinish(InterfaceGeneratedMesh,InterfaceMeshUserNumber,InterfaceMesh,Err)
@@ -767,38 +787,68 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSInterfaceMeshConnectivity_Initialise(InterfaceMeshConnectivity,Err)
   CALL CMISSInterfaceMeshConnectivity_CreateStart(Interface,InterfaceMesh,InterfaceMeshConnectivity,Err)
   CALL CMISSInterfaceMeshConnectivity_BasisSet(InterfaceMeshConnectivity,InterfaceMappingBasis,Err)
-  SELECT CASE(InterpolationType)
-  CASE(1,4)
-    NumberOfNodeXi=2
-  CASE(2)
-    NumberOfNodeXi=3
-  CASE(3)
-    NumberOfNodeXi=4
-  CASE DEFAULT
-    CALL HANDLE_ERROR("Invalid interpolation type.")
-  END SELECT
-    DO y_element_idx=1,NumberGlobalYElements
-      !Map the interface element to the elements in mesh 1
-      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,y_element_idx,Mesh1Index, &
-        y_element_idx*NumberGlobalXElements,Err)
+  !Map the interface element to the elements in mesh 1
+  DO interfaceYElementIdx=1,NumberGlobalInterfaceYElements
+    IF(NumberGlobalYElements2>NumberGlobalYElements1) THEN
+      coupledMeshElementNumber=CEILING((interfaceYElementIdx/REAL(NumberGlobalYElements2,CMISSDP))*NumberGlobalXElements1)
+      WRITE(*,*) coupledMeshElementNumber
+      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+       coupledMeshElementNumber,Err)
+      XI2 = [ 1.0_CMISSDP, interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP)) &
+        & -1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP)]
+      WRITE(*,*) interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP)) &
+        & -1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP)
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+        & coupledMeshElementNumber,1,1,XI2,Err)
+      XI2 = [ 1.0_CMISSDP, interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP))]
+      WRITE(*,*) interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements2,CMISSDP))
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+        & coupledMeshElementNumber,2,1,XI2,Err)
+    ELSE
+      coupledMeshElementNumber=interfaceYElementIdx*NumberGlobalXElements1
+      WRITE(*,*) coupledMeshElementNumber
+      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+        coupledMeshElementNumber,Err)
+
+      WRITE(*,*) interfaceYElementIdx
       XI2 = [ 1.0_CMISSDP, 0.0_CMISSDP ]
-      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,y_element_idx,Mesh1Index, &
-        & y_element_idx*NumberGlobalXElements,1,1,XI2,Err)
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+        & coupledMeshElementNumber,1,1,XI2,Err)
       XI2 = [ 1.0_CMISSDP, 1.0_CMISSDP ]
-      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,y_element_idx,Mesh1Index, &
-        & y_element_idx*NumberGlobalXElements,2,1,XI2,Err)
-      !Map the interface element to the elements in mesh 2
-      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,y_element_idx,Mesh2Index, &
-        & 1+(y_element_idx-1)*NumberGlobalXElements,Err)
-      DO mesh_local_y_node = 1,NumberOfNodeXi-1
-        XI2 = [ 0.0_CMISSDP, REAL(mesh_local_y_node-1,CMISSDP)/REAL(NumberOfNodeXi-1,CMISSDP) ]
-        CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,y_element_idx,Mesh2Index, &
-          & 1+(y_element_idx-1)*NumberGlobalXElements,1,1,XI2,Err)
-        XI2 = [ 0.0_CMISSDP, REAL(mesh_local_y_node,CMISSDP)/REAL(NumberOfNodeXi-1,CMISSDP) ]
-        CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,y_element_idx,Mesh2Index, &
-          & 1+(y_element_idx-1)*NumberGlobalXElements,2,1,XI2,Err)
-      ENDDO !mesh_local_y_node
-    ENDDO !y_element_idx
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh1Index, &
+        & coupledMeshElementNumber,2,1,XI2,Err)
+    ENDIF
+  ENDDO !interfaceYElementIdx
+  !Map the interface element to the elements in mesh 2
+  DO interfaceYElementIdx=1,NumberGlobalInterfaceYElements
+    IF(NumberGlobalYElements1>NumberGlobalYElements2) THEN
+      coupledMeshElementNumber=CEILING((interfaceYElementIdx/REAL(NumberGlobalYElements1,CMISSDP)))
+      WRITE(*,*) coupledMeshElementNumber
+      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+        coupledMeshElementNumber,Err)
+      XI2 = [ 0.0_CMISSDP, interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP)) &
+        & -1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP)]
+      WRITE(*,*) interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP)) &
+        & -1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP)
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+        & coupledMeshElementNumber,1,1,XI2,Err)
+      XI2 = [ 0.0_CMISSDP, interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP))]
+      WRITE(*,*) interfaceYElementIdx*(1.0_CMISSDP/REAL(NumberGlobalYElements1,CMISSDP))
+      CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+        & coupledMeshElementNumber,2,1,XI2,Err)
+    ELSE
+      CALL CMISSInterfaceMeshConnectivity_ElementNumberSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+        & 1+(interfaceYElementIdx-1)*NumberGlobalXElements2,Err)
+      DO meshLocalYNode = 1,NumberOfNodeXi-1
+        XI2 = [ 0.0_CMISSDP, 0.0_CMISSDP ]
+        CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+          & 1+(interfaceYElementIdx-1)*NumberGlobalXElements2,1,1,XI2,Err)
+        XI2 = [ 0.0_CMISSDP, 1.0_CMISSDP ]
+        CALL CMISSInterfaceMeshConnectivity_ElementXiSet(InterfaceMeshConnectivity,interfaceYElementIdx,Mesh2Index, &
+          & 1+(interfaceYElementIdx-1)*NumberGlobalXElements2,2,1,XI2,Err)
+      ENDDO !meshLocalYNode
+    ENDIF
+  ENDDO !interfaceYElementIdx
   CALL CMISSInterfaceMeshConnectivity_CreateFinish(InterfaceMeshConnectivity,Err)
 
   !Create a decomposition for the interface mesh
@@ -821,7 +871,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Set the domain to be used by the field components.
   CALL CMISSField_ComponentMeshComponentSet(InterfaceGeometricField,CMISS_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL CMISSField_ComponentMeshComponentSet(InterfaceGeometricField,CMISS_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NumberGlobalZElements/=0) THEN
+  IF(TwoDimensional.EQV..FALSE.) THEN
     CALL CMISSField_ComponentMeshComponentSet(InterfaceGeometricField,CMISS_FIELD_U_VARIABLE_TYPE,3,1,Err)
   ENDIF
    !Finish creating the first field
@@ -843,7 +893,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     CALL CMISSInterfaceCondition_MethodSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_LAGRANGE_MULTIPLIERS_METHOD,Err)
   ENDIF
   !Specify the type of interface condition operator
-  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_GAUSS_CONTINUITY_OPERATOR,Err)
+  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,ContinuityOperator,Err)
   !Add in the dependent variables from the equations sets
   CALL CMISSInterfaceCondition_DependentVariableAdd(InterfaceCondition,Mesh1Index,EquationsSet1, &
     & CMISS_FIELD_U_VARIABLE_TYPE,Err)
@@ -871,7 +921,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       & 1,100.0_CMISSDP,Err)
     CALL CMISSField_ComponentValuesInitialise(PenaltyField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE, &
       & 2,100.0_CMISSDP,Err)
-    IF(NumberGlobalZElements/=0) THEN
+    IF(TwoDimensional.EQV..FALSE.) THEN
       CALL CMISSField_ComponentValuesInitialise(PenaltyField,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE, &
         & 3,100.0_CMISSDP,Err)
     ENDIF
@@ -885,7 +935,10 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !CALL CMISSInterfaceEquations_SparsitySet(InterfaceEquations,CMISS_EQUATIONS_SPARSE_MATRICES,Err)
   CALL CMISSInterfaceEquations_SparsitySet(InterfaceEquations,CMISS_EQUATIONS_FULL_MATRICES,Err)
   !Set the interface equations output
-  CALL CMISSInterfaceEquations_OutputTypeSet(InterfaceEquations,CMISS_EQUATIONS_MATRIX_OUTPUT,Err)
+  CALL CMISSInterfaceEquations_OutputTypeSet(InterfaceEquations,CMISS_EQUATIONS_NO_OUTPUT,Err)
+  !CALL CMISSInterfaceEquations_OutputTypeSet(InterfaceEquations,CMISS_EQUATIONS_TIMING_OUTPUT,Err)
+  !CALL CMISSInterfaceEquations_OutputTypeSet(InterfaceEquations,CMISS_EQUATIONS_MATRIX_OUTPUT,Err)
+  CALL CMISSInterfaceEquations_OutputTypeSet(InterfaceEquations,CMISS_EQUATIONS_ELEMENT_MATRIX_OUTPUT,Err)
   !Finish creating the interface equations
   CALL CMISSInterfaceCondition_EquationsCreateFinish(InterfaceCondition,Err)
 
@@ -916,23 +969,23 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSProblem_SolversCreateStart(CoupledProblem,Err)
   CALL CMISSProblem_SolverGet(CoupledProblem,CMISS_CONTROL_LOOP_NODE,1,NonLinearSolver,Err)
   !CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_NO_OUTPUT,Err)
-  CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_PROGRESS_OUTPUT,Err)
+  !CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_PROGRESS_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_TIMING_OUTPUT,Err)
-  !CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_SOLVER_OUTPUT,Err)
+  CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_SOLVER_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(NonLinearSolver,CMISS_SOLVER_MATRIX_OUTPUT,Err)
   !CALL CMISSSolver_NewtonJacobianCalculationTypeSet(NonLinearSolver,CMISS_SOLVER_NEWTON_JACOBIAN_FD_CALCULATED,Err)
   CALL CMISSSolver_NewtonJacobianCalculationTypeSet(NonLinearSolver,CMISS_SOLVER_NEWTON_JACOBIAN_EQUATIONS_CALCULATED,Err)
   CALL CMISSSolver_NewtonMaximumFunctionEvaluationsSet(NonLinearSolver,10000,Err)
-  !CALL CMISSSolver_NewtonMaximumIterationsSet(NonLinearSolver,5,Err)
-  !CALL CMISSSolver_NewtonAbsoluteToleranceSet(NonlinearSolver,1e-6_CMISSDP,Err)
-  !CALL CMISSSolver_NewtonRelativeToleranceSet(NonlinearSolver,1e-6_CMISSDP,Err)
+  CALL CMISSSolver_NewtonMaximumIterationsSet(NonLinearSolver,1000,Err)
+  CALL CMISSSolver_NewtonAbsoluteToleranceSet(NonlinearSolver,1e-9_CMISSDP,Err)
+  CALL CMISSSolver_NewtonRelativeToleranceSet(NonlinearSolver,1e-12_CMISSDP,Err)
   !CALL CMISSSolver_LibraryTypeSet(NonLinearSolver,CMISS_SOLVER_MUMPS_LIBRARY,Err)
   CALL CMISSSolver_NewtonLinearSolverGet(NonLinearSolver,LinearSolver,Err)
   CALL CMISSSolver_LinearTypeSet(LinearSolver,CMISS_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
   CALL CMISSSolver_LibraryTypeSet(LinearSolver,CMISS_SOLVER_LAPACK_LIBRARY,Err)
   !CALL CMISSSolver_LinearTypeSet(LinearSolver,CMISS_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
   !CALL CMISSSolver_LinearIterativeMaximumIterationsSet(LinearSolver,1,Err)
-  CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_PROGRESS_OUTPUT,Err)
+  !CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_PROGRESS_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_TIMING_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_SOLVER_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_MATRIX_OUTPUT,Err)
@@ -963,7 +1016,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
 
   !Export the fields
   PRINT *, ' == >> EXPORTING FIELDS << == '
-  IF(NumberGlobalZElements==0) THEN
+  IF(TwoDimensional) THEN
     CALL CMISSFields_Initialise(Fields1,Err)
     CALL CMISSFields_Create(Region1,Fields1,Err)
     CALL CMISSFields_NodesExport(Fields1,"2DCoupled-FiniteElasticityMembrane-FiniteElasticityMembrane_1_Initial","FORTRAN",Err)
@@ -1010,185 +1063,258 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSSolverEquations_BoundaryConditionsCreateStart(NonLinearSolverEquations,BoundaryConditions,Err)
 
   IF(Uncoupled.EQV..FALSE.) THEN
+    !Coupled mesh 1 node groups
+    NumberOfNodesX1=NumberGlobalXElements1*(NumberOfNodeXi-1)+1
+    NumberOfNodesY1=NumberGlobalYElements1*(NumberOfNodeXi-1)+1
+    NumberOfNodesZ1=1
+    TotalNumberOfNodes1=NumberOfNodesX1*NumberOfNodesY1*NumberOfNodesZ1
+    ALLOCATE(BackNodeGroup1(NumberOfNodesY1),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BackNodeGroup1.")
+    ALLOCATE(BottomNodeGroup1(NumberOfNodesX1),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BottomNodeGroup1.")
+    DO Ynode=1,NumberOfNodesY1
+      BackNodeGroup1(Ynode)=NumberOfNodesX1*(Ynode-1)+1
+    ENDDO
+    DO Xnode=1,NumberOfNodesX1
+      BottomNodeGroup1(Xnode)=Xnode
+    ENDDO
+    !Coupled mesh 2 node groups
+    NumberOfNodesX2=NumberGlobalXElements2*(NumberOfNodeXi-1)+1
+    NumberOfNodesY2=NumberGlobalYElements2*(NumberOfNodeXi-1)+1
+    NumberOfNodesZ2=1
+    TotalNumberOfNodes2=NumberOfNodesX2*NumberOfNodesY2*NumberOfNodesZ2
+    ALLOCATE(FrontNodeGroup2(NumberOfNodesY2),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate FrontNodeGroup2.")
+    ALLOCATE(BottomNodeGroup2(NumberOfNodesX2),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BottomNodeGroup2.")
+    DO Ynode=1,NumberOfNodesY2
+      FrontNodeGroup2(Ynode)=NumberOfNodesX2*(Ynode)
+    ENDDO
+    DO Xnode=1,NumberOfNodesX2
+      BottomNodeGroup2(Xnode)=Xnode
+    ENDDO
+
+    !Interface mesh node groups
+    NumberOfInterfaceNodes=NumberGlobalInterfaceYElements*(NumberOfNodeXi-1)+1
+    ALLOCATE(InterfaceNodeGroup(NumberOfInterfaceNodes),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate InterfaceNodeGroup.")
+    DO Ynode=1,NumberOfInterfaceNodes
+      InterfaceNodeGroup(Ynode)=Ynode
+    ENDDO
+    WRITE(*,*)"BackNodeGroup1"
+    WRITE(*,*)BackNodeGroup1
+    WRITE(*,*)"BottomNodeGroup1"
+    WRITE(*,*)BottomNodeGroup1
+    WRITE(*,*)"FrontNodeGroup2"
+    WRITE(*,*)FrontNodeGroup2
+    WRITE(*,*)"BottomNodeGroup2"
+    WRITE(*,*)BottomNodeGroup2
+    WRITE(*,*)"InterfaceNodeGroup"
+    WRITE(*,*)InterfaceNodeGroup
+    WRITE(*,*)"TotalNumberOfNodes1"
+    WRITE(*,*)TotalNumberOfNodes1
+    WRITE(*,*)"TotalNumberOfNodes2"
+    WRITE(*,*)TotalNumberOfNodes2
     !============================================================================================================================
     ! COUPLED
     !============================================================================================================================
     !Start the creation of the solver equations boundary conditions for the first region
     PRINT *, ' == >> CREATING BOUNDARY CONDITIONS(1) << == '
 
-    Back2NodeGroup = [1,3]
-    DO node_idx=1,SIZE(Back2NodeGroup)
-      node=Back2NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+    DO node_idx=1,SIZE(BackNodeGroup1)
+      node=BackNodeGroup1(node_idx)
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
         & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      IF(.NOT.Uniaxial) THEN
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
-
-    Side2NodeGroup = [1,2]
-    DO node_idx=1,SIZE(Side2NodeGroup)
-      node=Side2NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-    ENDDO
-
-    IF(NumberGlobalZElements/=0) THEN
-      Bottom4NodeGroup = [1,2,3,4]
-      DO node_idx=1,SIZE(Bottom4NodeGroup)
-        node=Bottom4NodeGroup(node_idx)
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-      ENDDO
-    ENDIF
 
     !Start the creation of the solver equations boundary conditions for the second region
     PRINT *, ' == >> CREATING BOUNDARY CONDITIONS(2) << == '
 
-    Front2NodeGroup = [2,4]
-    DO node_idx=1,SIZE(Front2NodeGroup)
-      node=Front2NodeGroup(node_idx)
+    DO node_idx=1,SIZE(FrontNodeGroup2)
+      node=FrontNodeGroup2(node_idx)
       IF(ForceBoundaryConditions.EQV..TRUE.) THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
           & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-0.5_CMISSDP,Err)
       ELSE
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,2.5_CMISSDP,Err)
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
-    Side2NodeGroup = [1,2]
-    DO node_idx=1,SIZE(Side2NodeGroup)
-      node=Side2NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-    ENDDO
-
-    IF(NumberGlobalZElements/=0) THEN
-      Bottom4NodeGroup = [1,2,3,4]
-      DO node_idx=1,SIZE(Bottom4NodeGroup)
-        node=Bottom4NodeGroup(node_idx)
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-      ENDDO
-    ENDIF
-
     !InterfaceNodes
-    CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-      & CMISS_NO_GLOBAL_DERIV,1,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-    IF(NumberGlobalZElements/=0) THEN
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,1,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,2,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+    IF(Uniaxial) THEN
+     CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+       & CMISS_NO_GLOBAL_DERIV,1,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
     ENDIF
 
-!    DO node=1,2
-!      DO component=1,NumberOfDimensions
-!        IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-!          CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-!            & CMISS_GLOBAL_DERIV_S1,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-!        ENDIF
-!      ENDDO
-!    ENDDO
+    DO node=1,NumberOfInterfaceNodes
+      IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
+        !CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        !  & CMISS_GLOBAL_DERIV_S1,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        IF(DecoupleInterfaceDerivatives) THEN
+          CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+            & CMISS_GLOBAL_DERIV_S1,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        ENDIF
+      ENDIF
+      IF(TwoDimensional.EQV..FALSE.) THEN
+       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+         & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
+    ENDDO
 
   ELSE
     !============================================================================================================================
     ! Uncoupled
     !============================================================================================================================
+
+    NumberOfNodesX1=NumberGlobalXElements1*(NumberOfNodeXi-1)+1
+    NumberOfNodesY1=NumberGlobalYElements1*(NumberOfNodeXi-1)+1
+    NumberOfNodesZ1=1
+    TotalNumberOfNodes1=NumberOfNodesX1*NumberOfNodesY1*NumberOfNodesZ1
+    ALLOCATE(BackNodeGroup1(NumberOfNodesY1),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BackNodeGroup1 type.")
+    ALLOCATE(FrontNodeGroup1(NumberOfNodesY1),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate FrontNodeGroup1 type.")
+    ALLOCATE(BottomNodeGroup1(NumberOfNodesX1),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BottomNodeGroup1.")
+    DO Ynode=1,NumberOfNodesY1
+      BackNodeGroup1(Ynode)=NumberOfNodesX1*(Ynode-1)+1
+      FrontNodeGroup1(Ynode)=NumberOfNodesX1*(Ynode)
+    ENDDO
+    DO Xnode=1,NumberOfNodesX1
+      BottomNodeGroup1(Xnode)=Xnode
+    ENDDO
+    NumberOfNodesX2=NumberGlobalXElements2*(NumberOfNodeXi-1)+1
+    NumberOfNodesY2=NumberGlobalYElements2*(NumberOfNodeXi-1)+1
+    NumberOfNodesZ2=1
+    TotalNumberOfNodes2=NumberOfNodesX2*NumberOfNodesY2*NumberOfNodesZ2
+    ALLOCATE(BackNodeGroup2(NumberOfNodesY2),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BackNodeGroup2 type.")
+    ALLOCATE(FrontNodeGroup2(NumberOfNodesY2),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate FrontNodeGroup2 type.")
+    ALLOCATE(BottomNodeGroup2(NumberOfNodesX2),STAT=ERR)
+    IF(ERR/=0) CALL HANDLE_ERROR("Could not allocate BottomNodeGroup2.")
+    DO Ynode=1,NumberOfNodesY2
+      BackNodeGroup2(Ynode)=NumberOfNodesX2*(Ynode-1)+1
+      FrontNodeGroup2(Ynode)=NumberOfNodesX2*(Ynode)
+    ENDDO
+    DO Xnode=1,NumberOfNodesX2
+      BottomNodeGroup2(Xnode)=Xnode
+    ENDDO
+
     !Start the creation of the solver equations boundary conditions for the first region
     PRINT *, ' == >> CREATING BOUNDARY CONDITIONS(1) << == '
 
-    Back2NodeGroup = [1,4]
-    DO node_idx=1,SIZE(Back2NodeGroup)
-      node=Back2NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+    DO node_idx=1,SIZE(BackNodeGroup1)
+      node=BackNodeGroup1(node_idx)
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
         & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      IF(.NOT.Uniaxial) THEN
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
-    Front2NodeGroup = [3,6]
-    DO node_idx=1,SIZE(Front2NodeGroup)
-      node=Front2NodeGroup(node_idx)
+    DO node_idx=1,SIZE(FrontNodeGroup1)
+      node=FrontNodeGroup1(node_idx)
       IF(ForceBoundaryConditions.EQV..TRUE.) THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
           & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-0.5_CMISSDP,Err)
       ELSE
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,2.1_CMISSDP,Err)
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+        !CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        !  & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
-    ENDDO
-
-    Side3NodeGroup = [1,2,3]
-    DO node_idx=1,SIZE(Side3NodeGroup)
-      node=Side3NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
-    ENDDO
-
-    Bottom6NodeGroup = [1,2,3,4,5,6]
-    DO node_idx=1,SIZE(Bottom6NodeGroup)
-      node=Bottom6NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
     ENDDO
 
     !Start the creation of the solver equations boundary conditions for the second region
     PRINT *, ' == >> CREATING BOUNDARY CONDITIONS(2) << == '
 
-    Back2NodeGroup = [1,4]
-    DO node_idx=1,SIZE(Back2NodeGroup)
-      node=Back2NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+    DO node_idx=1,SIZE(BackNodeGroup2)
+      node=BackNodeGroup2(node_idx)
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
         & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      IF(.NOT.Uniaxial) THEN
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
-    Front2NodeGroup = [3,6]
-    DO node_idx=1,SIZE(Front2NodeGroup)
-      node=Front2NodeGroup(node_idx)
+    DO node_idx=1,SIZE(FrontNodeGroup2)
+      node=FrontNodeGroup2(node_idx)
       IF(ForceBoundaryConditions.EQV..TRUE.) THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
           & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-0.5_CMISSDP,Err)
       ELSE
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,2.1_CMISSDP,Err)
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+        !CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        !  & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
-        CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
           & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
-    Side3NodeGroup = [1,2,3]
-    DO node_idx=1,SIZE(Side3NodeGroup)
-      node=Side3NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+  ENDIF
+  WRITE(*,*)"BLA"
+  IF(Uniaxial) THEN
+    DO node_idx=1,SIZE(BottomNodeGroup1)
+      node=BottomNodeGroup1(node_idx)
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
         & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_GLOBAL_DERIV_S1,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
     ENDDO
-
-    Bottom6NodeGroup = [1,2,3,4,5,6]
-    DO node_idx=1,SIZE(Bottom6NodeGroup)
-      node=Bottom6NodeGroup(node_idx)
-      CALL CMISSBoundaryConditions_SetNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+    DO node_idx=1,SIZE(BottomNodeGroup2)
+      node=BottomNodeGroup2(node_idx)
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
+        CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+          & CMISS_GLOBAL_DERIV_S1,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+      ENDIF
+    ENDDO
+  ENDIF
+  IF(TwoDimensional.EQV..FALSE.) THEN
+    DO node=1,TotalNumberOfNodes1
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
         & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
     ENDDO
-
+    DO node=1,TotalNumberOfNodes2
+      CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
+        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+    ENDDO
   ENDIF
 
   CALL CMISSSolverEquations_BoundaryConditionsCreateFinish(NonLinearSolverEquations,Err)
@@ -1199,7 +1325,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
 
   !Export the fields
   PRINT *, ' == >> EXPORTING FIELDS << == '
-  IF(NumberGlobalZElements==0) THEN
+  IF(TwoDimensional) THEN
     CALL CMISSFields_Initialise(Fields1,Err)
     CALL CMISSFields_Create(Region1,Fields1,Err)
     CALL CMISSFields_NodesExport(Fields1,"2DCoupled-FiniteElasticityMembrane-FiniteElasticityMembrane_1","FORTRAN",Err)
@@ -1256,3 +1382,48 @@ CONTAINS
   END SUBROUTINE HANDLE_ERROR
 
 END PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
+
+
+!NumberOfNodesX1=NumberGlobalXElements1*(NumberOfNodeXi-1)+1
+!NumberOfNodesY1=NumberGlobalYElements1*(NumberOfNodeXi-1)+1
+!NumberOfNodesZ1=NumberGlobalYElements1*(NumberOfNodeXi-1)+1
+
+!ALLOCATE(BackNodeGroup1(NumberOfNodesY1),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(FrontNodeGroup1(NumberOfNodesY1),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(BottomNodeGroup1(NumberOfNodesY1),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(TopNodeGroup1(NumberOfNodesX1),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+
+!DO Ynode=1,NumberOfNodesY1
+!  BackNodeGroup1(node)=NumberOfNodesX1*(Ynode-1)+1
+!  FrontNodeGroup1(node)=NumberOfNodesX1*(Ynode)
+!ENDDO
+!DO Xnode=1,NumberOfNodesX1
+!  BottomNodeGroup1(node)=Xnode
+!  TopNodeGroup1(node)=Xnode+(NumberOfNodesY1-1)*NumberOfNodesX1)
+!ENDDO
+
+!NumberOfNodesX2=NumberGlobalXElements2*(NumberOfNodeXi-1)+1
+!NumberOfNodesY2=NumberGlobalYElements2*(NumberOfNodeXi-1)+1
+!NumberOfNodesZ2=NumberGlobalYElements2*(NumberOfNodeXi-1)+1
+
+!ALLOCATE(BackNodeGroup2(NumberOfNodesY2),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(FrontNodeGroup2(NumberOfNodesY2),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(BottomNodeGroup2(NumberOfNodesY2),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+!ALLOCATE(TopNodeGroup2(NumberOfNodesX2),STAT=ERR)
+!IF(ERR/=0) CALL FLAG_ERROR("Could not allocate BackNodeGroup1.",ERR,ERROR,*999)
+
+!DO Ynode=1,NumberOfNodesY2
+!  BackNodeGroup2(node)=NumberOfNodesX2*(Ynode-1)+1
+!  FrontNodeGroup2(node)=NumberOfNodesX2*(Ynode)
+!ENDDO
+!DO Xnode=1,NumberOfNodesX2
+!  BottomNodeGroup2(node)=Xnode
+!  TopNodeGroup2(node)=Xnode+(NumberOfNodesY2-1)*NumberOfNodesX2)
+!ENDDO
