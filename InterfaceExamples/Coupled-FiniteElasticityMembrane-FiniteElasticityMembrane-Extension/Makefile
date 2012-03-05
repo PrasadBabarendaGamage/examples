@@ -64,7 +64,7 @@ endif
 
 EXAMPLE_PATH= InterfaceExamples/
 
-EXAMPLE_NAME = Coupled-FiniteElasticityMembrane-FiniteElasticityMembraneExtension
+EXAMPLE_NAME = Coupled-FiniteElasticityMembrane-FiniteElasticityMembrane-Extension
 
 include $(GLOBAL_ROOT)/ExampleMakefile
 

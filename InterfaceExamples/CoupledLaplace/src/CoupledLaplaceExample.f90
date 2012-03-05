@@ -663,7 +663,7 @@ PROGRAM COUPLEDLAPLACE
   !Specify the method for the interface condition
   CALL CMISSInterfaceCondition_MethodSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_LAGRANGE_MULTIPLIERS_METHOD,Err)
   !Specify the type of interface condition operator
-  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_CONTINUITY_OPERATOR,Err)
+  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_GAUSS_CONTINUITY_OPERATOR,Err)
   !Add in the dependent variables from the equations sets
   CALL CMISSInterfaceCondition_DependentVariableAdd(InterfaceCondition,Mesh1Index,EquationsSet1, &
     & CMISS_FIELD_U_VARIABLE_TYPE,Err)
