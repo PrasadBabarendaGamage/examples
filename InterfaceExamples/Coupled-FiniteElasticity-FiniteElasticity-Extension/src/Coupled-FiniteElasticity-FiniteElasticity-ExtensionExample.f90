@@ -192,14 +192,14 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   DecoupleInterfaceDerivatives=.FALSE.
   !ContinuityOperator=CMISS_INTERFACE_CONDITION_FIELD_GAUSS_CONTINUITY_OPERATOR
   ContinuityOperator=CMISS_INTERFACE_CONDITION_FIELD_NODE_CONTINUITY_OPERATOR
-  InterpolationType = CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION
-  !InterpolationType = CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION
+  !InterpolationType = CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION
+  InterpolationType = CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION
   PressureInterpolationType = CMISS_BASIS_LINEAR_LAGRANGE_INTERPOLATION
   NumberGlobalXElements1=1
   NumberGlobalYElements1=1
+  NumberGlobalZElements1=1
   NumberGlobalXElements2=1
   NumberGlobalYElements2=1
-  NumberGlobalZElements1=1
   NumberGlobalZElements2=1
   NumberGlobalInterfaceYElements=MAX(NumberGlobalYElements1,NumberGlobalYElements2)
   NumberGlobalInterfaceZElements=MAX(NumberGlobalZElements1,NumberGlobalZElements2)
@@ -242,7 +242,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CASE DEFAULT
     CALL HANDLE_ERROR("Invalid interpolation type.")
   END SELECT
-  LoadSteps=1
+  LoadSteps=5
 
   !Intialise OpenCMISS
   CALL CMISSInitialise(WorldCoordinateSystem,WorldRegion,Err)
@@ -629,14 +629,16 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     IF(HydrostaticPressureBasis) THEN
       CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,4,2,Err)
       CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,2,Err)
-      !Set the pressure to be nodally based and use the second mesh component if required
+    ELSE
+      CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,4,1,Err)
+      CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,1,Err)
+    ENDIF
+    IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
       CALL CMISSField_ComponentInterpolationSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,4, &
         & CMISS_FIELD_NODE_BASED_INTERPOLATION,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4, &
         & CMISS_FIELD_NODE_BASED_INTERPOLATION,Err)
     ELSE
-      CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,4,1,Err)
-      CALL CMISSField_ComponentMeshComponentSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,1,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,4, &
         & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4, &
@@ -676,14 +678,16 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     IF(HydrostaticPressureBasis) THEN
       CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,4,2,Err)
       CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,2,Err)
-      !Set the pressure to be nodally based and use the second mesh component if required
+    ELSE
+      CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,4,1,Err)
+      CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,1,Err)
+    ENDIF
+    IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
       CALL CMISSField_ComponentInterpolationSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,4, &
         & CMISS_FIELD_NODE_BASED_INTERPOLATION,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4, &
         & CMISS_FIELD_NODE_BASED_INTERPOLATION,Err)
     ELSE
-      CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,4,1,Err)
-      CALL CMISSField_ComponentMeshComponentSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4,1,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,4, &
         & CMISS_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
       CALL CMISSField_ComponentInterpolationSet(DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,4, &
@@ -693,7 +697,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   !Finish creating the first field
   CALL CMISSField_CreateFinish(DependentField2,Err)
 
-  !Initialise dependent field from undeformed geometry and displacement bcs and set hydrostatic pressure
+  !Initialise dependent field from undeformed geometry and set hydrostatic pressure if required for the first region
   PRINT *, ' == >> INITIALIZE DEPENDENT FIELD(1) << == '
   CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField1,CMISS_FIELD_U_VARIABLE_TYPE, &
     & CMISS_FIELD_VALUES_SET_TYPE,1,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,Err)
@@ -706,7 +710,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       & 4,-8.0_CMISSDP,Err)
   ENDIF
 
-  !Initialise dependent field from undeformed geometry and displacement bcs and set hydrostatic pressure
+  !Initialise dependent field from undeformed geometry and set hydrostatic pressure if required for the second region
   PRINT *, ' == >> INITIALIZE DEPENDENT FIELD(2) << == '
   CALL CMISSField_ParametersToFieldParametersComponentCopy(GeometricField2,CMISS_FIELD_U_VARIABLE_TYPE, &
     & CMISS_FIELD_VALUES_SET_TYPE,1,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,CMISS_FIELD_VALUES_SET_TYPE,1,Err)
@@ -755,18 +759,6 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSEquationsSet_CreateFinish(EquationsSet2,Err)
 
   !Create the equations set dependent field variables for the first equations set
-  PRINT *, ' == >> CREATING DEPENDENT FIELD EQUATION SET(1) << == '
-  CALL CMISSEquationsSet_DependentCreateStart(EquationsSet1,DependentField1UserNumber,DependentField1,Err)
-  !Finish the equations set dependent field variables
-  CALL CMISSEquationsSet_DependentCreateFinish(EquationsSet1,Err)
-
-  !Create the equations set dependent field variables for the second equations set
-  PRINT *, ' == >> CREATING DEPENDENT FIELD EQUATION SET(2) << == '
-  CALL CMISSEquationsSet_DependentCreateStart(EquationsSet2,DependentField2UserNumber,DependentField2,Err)
-  !Finish the equations set dependent field variables
-  CALL CMISSEquationsSet_DependentCreateFinish(EquationsSet2,Err)
-
-  !Create the equations set dependent field variables for the first equations set
   PRINT *, ' == >> CREATING MATERIAL FIELD EQUATION SET(1) << == '
   CALL CMISSEquationsSet_MaterialsCreateStart(EquationsSet1,MaterialField1UserNumber,MaterialField1,Err)
   !Finish the equations set dependent field variables
@@ -777,6 +769,18 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSEquationsSet_MaterialsCreateStart(EquationsSet2,MaterialField2UserNumber,MaterialField2,Err)
   !Finish the equations set dependent field variables
   CALL CMISSEquationsSet_MaterialsCreateFinish(EquationsSet2,Err)
+
+  !Create the equations set dependent field variables for the first equations set
+  PRINT *, ' == >> CREATING DEPENDENT FIELD EQUATION SET(1) << == '
+  CALL CMISSEquationsSet_DependentCreateStart(EquationsSet1,DependentField1UserNumber,DependentField1,Err)
+  !Finish the equations set dependent field variables
+  CALL CMISSEquationsSet_DependentCreateFinish(EquationsSet1,Err)
+
+  !Create the equations set dependent field variables for the second equations set
+  PRINT *, ' == >> CREATING DEPENDENT FIELD EQUATION SET(2) << == '
+  CALL CMISSEquationsSet_DependentCreateStart(EquationsSet2,DependentField2UserNumber,DependentField2,Err)
+  !Finish the equations set dependent field variables
+  CALL CMISSEquationsSet_DependentCreateFinish(EquationsSet2,Err)
 
   !Create the equations set equations for the first equations set
   PRINT *, ' == >> CREATING EQUATIONS(1) << == '
@@ -974,7 +978,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   ENDIF
 
   !Specify the type of interface condition operator
-  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,CMISS_INTERFACE_CONDITION_FIELD_NODE_CONTINUITY_OPERATOR,Err)
+  CALL CMISSInterfaceCondition_OperatorSet(InterfaceCondition,ContinuityOperator,Err)
   !Add in the dependent variables from the equations sets
   CALL CMISSInterfaceCondition_DependentVariableAdd(InterfaceCondition,Mesh1Index,EquationsSet1, &
     & CMISS_FIELD_U_VARIABLE_TYPE,Err)
@@ -1012,6 +1016,7 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSInterfaceEquations_Initialise(InterfaceEquations,Err)
   CALL CMISSInterfaceCondition_EquationsCreateStart(InterfaceCondition,InterfaceEquations,Err)
   !Set the interface equations sparsity
+  !\todo change CMISSInterfaceEquations_SparsitySet to CMISSInterfaceEquations_SparsityTypeSet
   !CALL CMISSInterfaceEquations_SparsitySet(InterfaceEquations,CMISS_EQUATIONS_SPARSE_MATRICES,Err)
   CALL CMISSInterfaceEquations_SparsitySet(InterfaceEquations,CMISS_EQUATIONS_FULL_MATRICES,Err)
   !Set the interface equations output
@@ -1060,11 +1065,11 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
   CALL CMISSSolver_NewtonMaximumIterationsSet(NonLinearSolver,10000,Err)
   CALL CMISSSolver_NewtonAbsoluteToleranceSet(NonlinearSolver,1e-12_CMISSDP,Err)
   CALL CMISSSolver_NewtonRelativeToleranceSet(NonlinearSolver,1e-12_CMISSDP,Err)
-  !CALL CMISSSolver_LibraryTypeSet(NonLinearSolver,CMISS_SOLVER_MUMPS_LIBRARY,Err)
   CALL CMISSSolver_NewtonLinearSolverGet(NonLinearSolver,LinearSolver,Err)
   CALL CMISSSolver_LinearTypeSet(LinearSolver,CMISS_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
   CALL CMISSSolver_LibraryTypeSet(LinearSolver,CMISS_SOLVER_LAPACK_LIBRARY,Err)
   !CALL CMISSSolver_LinearTypeSet(LinearSolver,CMISS_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
+  !CALL CMISSSolver_LibraryTypeSet(NonLinearSolver,CMISS_SOLVER_MUMPS_LIBRARY,Err)
   !CALL CMISSSolver_LinearIterativeMaximumIterationsSet(LinearSolver,1,Err)
   CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_PROGRESS_OUTPUT,Err)
   !CALL CMISSSolver_OutputTypeSet(LinearSolver,CMISS_SOLVER_TIMING_OUTPUT,Err)
@@ -1236,20 +1241,20 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     DO node_idx=1,SIZE(BackNodeGroup1)
       node=BackNodeGroup1(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       IF(.NOT.Uniaxial) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
@@ -1257,24 +1262,24 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       node=FrontNodeGroup2(node_idx)
       IF(ForceBoundaryConditions) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-1.5_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,-1.5_CMISSDP,Err)
       ELSE
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         IF(.NOT.Uniaxial) THEN
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.5_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         ENDIF
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
@@ -1284,12 +1289,12 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       DO node_idx=1,SIZE(InterfaceNodeGroupY)
         node=InterfaceNodeGroupY(node_idx)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDDO
       DO node_idx=1,SIZE(InterfaceNodeGroupZ)
         node=InterfaceNodeGroupZ(node_idx)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDDO
     ENDIF
     DO node=1,SIZE(InterfaceNodeGroup) !Number of nodes in interface mesh
@@ -1297,11 +1302,11 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
         IF(DecoupleInterfaceDerivatives) THEN
           DO component=1,3
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S1,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S1,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S1_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S1_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
           ENDDO
         ENDIF
       ENDIF
@@ -1309,14 +1314,14 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
         IF ((Incompressible1) .AND. (Incompressible2)) THEN
           component=4
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
           IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S1,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S1,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
             CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,LagrangeField,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-              & CMISS_GLOBAL_DERIV_S1_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+              & CMISS_GLOBAL_DERIV_S1_S2,node,component,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
           ENDIF
         ENDIF
       ENDIF 
@@ -1407,12 +1412,6 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     WRITE(*,*)BottomNodeGroup2
     WRITE(*,*)"RightNodeGroup2"
     WRITE(*,*)RightNodeGroup2
-    WRITE(*,*)"InterfaceNodeGroup"
-    WRITE(*,*)InterfaceNodeGroup
-    WRITE(*,*)"InterfaceNodeGroupY"
-    WRITE(*,*)InterfaceNodeGroupY
-    WRITE(*,*)"InterfaceNodeGroupZ"
-    WRITE(*,*)InterfaceNodeGroupZ
     WRITE(*,*)"TotalNumberOfNodes1"
     WRITE(*,*)TotalNumberOfNodes1
     WRITE(*,*)"TotalNumberOfNodes2"
@@ -1426,20 +1425,20 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     DO node_idx=1,SIZE(BackNodeGroup1)
       node=BackNodeGroup1(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       IF(.NOT.Uniaxial) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
@@ -1447,24 +1446,24 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       node=FrontNodeGroup1(node_idx)
       IF(ForceBoundaryConditions) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-1.5_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,-1.5_CMISSDP,Err)
       ELSE
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         IF(.NOT.Uniaxial) THEN
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         ENDIF
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
@@ -1474,20 +1473,20 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     DO node_idx=1,SIZE(BackNodeGroup2)
       node=BackNodeGroup2(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       IF(.NOT.Uniaxial) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
 
@@ -1495,24 +1494,24 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
       node=FrontNodeGroup2(node_idx)
       IF(ForceBoundaryConditions) THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_DELUDELN_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,-1.5_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,-1.5_CMISSDP,Err)
       ELSE
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+          & CMISS_NO_GLOBAL_DERIV,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         IF(.NOT.Uniaxial) THEN
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
           CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.25_CMISSDP,Err)
+            & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.25_CMISSDP,Err)
         ENDIF
       ENDIF
       IF(InterpolationType==CMISS_BASIS_CUBIC_HERMITE_INTERPOLATION)THEN
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
         CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+          & CMISS_GLOBAL_DERIV_S2_S3,node,1,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
       ENDIF
     ENDDO
   ENDIF
@@ -1521,22 +1520,22 @@ PROGRAM COUPLEDFINITEELASTICITYFINITEELASTICITY
     DO node_idx=1,SIZE(BottomNodeGroup1)
       node=BottomNodeGroup1(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
     ENDDO
     DO node_idx=1,SIZE(RightNodeGroup1)
       node=RightNodeGroup1(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField1,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
     ENDDO
     DO node_idx=1,SIZE(BottomNodeGroup2)
       node=BottomNodeGroup2(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,2,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
     ENDDO
     DO node_idx=1,SIZE(RightNodeGroup2)
       node=RightNodeGroup2(node_idx)
       CALL CMISSBoundaryConditions_AddNode(BoundaryConditions,DependentField2,CMISS_FIELD_U_VARIABLE_TYPE,1, &
-        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED,0.0_CMISSDP,Err)
+        & CMISS_NO_GLOBAL_DERIV,node,3,CMISS_BOUNDARY_CONDITION_FIXED_INCREMENTED,0.0_CMISSDP,Err)
     ENDDO
   ENDIF
 
